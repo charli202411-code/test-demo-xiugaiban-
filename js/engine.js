@@ -4,7 +4,9 @@
  *  - 匹配度 = Σ(权重×满足度) ÷ Σ权重 × 100%（充足1.0/部分0.5/缺失0，待补充不计入）
  *  - 档位：≥70 有竞争力；40~69 起步线；<40 差距较大
  *  - 行动生成：维度差距→行动模板；优先级 排序 高>中>低，再按每周耗时降序
- *  - 纠正：仅重算被纠正维度及关联行动项；行动完成：对应维度升一级
+ *  - 纠正（双向）：方向"更好"→维度上调为充足；方向"更差"→下调为缺失并生成补齐行动；
+ *    负向纠正的维度仍可通过完成行动逐级回升（行动验证）
+ *  - 行动完成：对应维度升一级（正向纠正后已充足的维度不再升）
  * ============================================================ */
 
 var LEVEL_META = {
@@ -17,6 +19,14 @@ var P_RANK = { '高': 0, '中': 1, '低': 2 };
 
 function trunc(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; }
 function findJob(id) { return JOBS.find(function (j) { return j.id === id; }) || JOBS[0]; }
+
+function computeMatch(dims) {
+  var counted = dims.filter(function (d) { return d.level !== 'todo'; });
+  var w = counted.reduce(function (s, d) { return s + d.weight; }, 0);
+  if (!w) return null;
+  var v = counted.reduce(function (s, d) { return s + d.weight * (LEVEL_META[d.level] ? LEVEL_META[d.level].score : 0); }, 0);
+  return Math.round(v / w * 100);
+}
 
 /**
  * 计算某条分析记录的当前有效结果（确定性，可重复计算）
@@ -40,22 +50,28 @@ function buildResult(record, doneActions) {
     };
   });
 
-  /* 2) 应用用户纠正（product-doc 5.4：仅重算被纠正维度） */
+  /* 2) 应用用户纠正（product-doc 5.4 双向规则：更好=上调充足 / 更差=下调缺失） */
+  var baseMatch = null;
+  if (!starter && (record.corrections || []).length) {
+    baseMatch = computeMatch(dims);
+  }
   (record.corrections || []).forEach(function (c) {
     var dim = dims.find(function (x) { return x.key === c.dimKey; });
     if (dim && dim.level !== 'todo') {
-      dim.level = 'full';
-      dim.tags = ['已纠正'];
-      dim.status = '已按你的纠正更新：' + trunc(c.note, 60);
+      var down = c.direction === 'down';
+      dim.level = down ? 'missing' : 'full';
+      dim.tags = ['已纠正', down ? '已下调' : '已上调'];
+      dim.status = '已按你的纠正' + (down ? '下调为缺失' : '上调为充足') + '：' + trunc(c.note, 60);
       dim.corrected = true;
     }
   });
 
-  /* 3) 应用已完成的行动（对应维度升一级） */
+  /* 3) 应用已完成的行动（对应维度升一级；负向纠正的维度可逐级回升=行动验证，
+   *    正向纠正后已充足或已升满的维度不再升） */
   (doneActions || []).forEach(function (a) {
     if (a.recordId !== record.id || a.status !== 'done' || !a.dimKey) return;
     var dim = dims.find(function (x) { return x.key === a.dimKey; });
-    if (dim && !dim.corrected && dim.level !== 'todo') {
+    if (dim && dim.level !== 'todo' && !(dim.corrected && dim.level === 'full')) {
       var up = { missing: 'partial', partial: 'full' };
       if (up[dim.level]) {
         dim.level = up[dim.level];
@@ -74,13 +90,14 @@ function buildResult(record, doneActions) {
   } else {
     dims.forEach(function (dim) {
       var d = job.dims.find(function (x) { return x.key === dim.key; });
-      if (dim.corrected) {
-        /* 纠正后：移除差距行动，给一个巩固行动（activity 维度用文档指定文案） */
+      if (dim.corrected && dim.level === 'full') {
+        /* 正向纠正后：移除差距行动，给一个巩固行动（activity 维度用文档指定文案） */
         var ct = d.consolidation || { title: '把补充的「' + dim.name + '」经历整理成成果展示', benefit: '案例沉淀', hoursText: '1.5 小时', weekly: 0, priority: '低' };
         actions.push({ id: dim.key + '-c', dimKey: dim.key, priority: ct.priority, title: ct.title, benefit: ct.benefit, hoursText: ct.hoursText, weekly: ct.weekly });
         return;
       }
       if (dim.level === 'todo') return;
+      /* 其余（含负向纠正后=缺失）按当前等级取差距/补齐行动模板 */
       (d.actions[dim.level] || []).forEach(function (t, i) {
         actions.push({ id: dim.key + '-' + i, dimKey: dim.key, priority: t.priority, title: t.title, benefit: t.benefit, hoursText: t.hoursText, weekly: t.weekly });
       });
@@ -90,13 +107,10 @@ function buildResult(record, doneActions) {
     });
   }
 
-  /* 5) 匹配度与档位（起步模式不计算） */
+  /* 5) 匹配度与档位（起步模式不计算）；baseMatch=未应用纠正的基准，供对比展示 */
   var match = null, tier = null;
   if (!starter) {
-    var counted = dims.filter(function (d) { return d.level !== 'todo'; });
-    var w = counted.reduce(function (s, d) { return s + d.weight; }, 0);
-    var v = counted.reduce(function (s, d) { return s + d.weight * LEVEL_META[d.level].score; }, 0);
-    match = Math.round(v / w * 100);
+    match = computeMatch(dims);
     tier = match >= 70 ? '有竞争力：重点补短板' : (match >= 40 ? '起步线：差距明确可补' : '差距较大：先聚焦基础');
   }
 
@@ -109,7 +123,7 @@ function buildResult(record, doneActions) {
   return {
     mode: starter ? 'starter' : 'full',
     jobId: job.id, jobName: job.name,
-    match: match, tier: tier,
+    match: match, tier: tier, baseMatch: baseMatch,
     dims: dims, actions: actions, timeCheck: timeCheck
   };
 }

@@ -425,7 +425,7 @@ function finishAnalysis(profile) {
 
 /* ================= P04 结果页 / P07 历史详情共用的结果渲染 ================= */
 var LEVEL_CHIP = { full: ['chip-full', '充足'], partial: ['chip-partial', '部分满足'], missing: ['chip-missing', '缺失'], todo: ['chip-todo', '待补充'] };
-var TAG_CLS = { '事实': 'tag-fact', '推测': 'tag-guess', '待补充': 'tag-todo', '已纠正': 'tag-fixed', '已提升': 'tag-up' };
+var TAG_CLS = { '事实': 'tag-fact', '推测': 'tag-guess', '待补充': 'tag-todo', '已纠正': 'tag-fixed', '已提升': 'tag-up', '已上调': 'tag-up', '已下调': 'tag-down' };
 var P_CHIP = { '高': 'p-high', '中': 'p-mid', '低': 'p-low' };
 
 function resultHTML(rec, res, opts) {
@@ -443,6 +443,9 @@ function resultHTML(rec, res, opts) {
     h += '<div class="match-circle" style="--pct:' + res.match + '"><div class="inner"><div class="num">' + res.match + '<small>%</small></div></div></div>'
       + '<div><h2 style="margin-bottom:4px">' + esc(res.jobName) + '</h2>'
       + '<p class="muted">' + esc(res.tier) + '</p>'
+      + (res.baseMatch !== null && res.baseMatch !== res.match
+        ? '<div class="match-delta ' + (res.match > res.baseMatch ? 'up' : 'down') + '">纠正修正：' + res.baseMatch + '% → <b>' + res.match + '%</b>（' + (res.match > res.baseMatch ? '↑ 上调 ' : '↓ 下调 ') + Math.abs(res.match - res.baseMatch) + ' 个百分点）</div>'
+        : '')
       + '<p class="muted" style="font-size:12px;margin-top:6px">分析时间：' + fmtTime(rec.createdAt) + ' · 匹配度 = Σ(维度权重×满足度) ÷ Σ权重</p></div>';
   } else {
     h += '<div class="match-none">信息不足<br>未计算匹配度</div>'
@@ -473,7 +476,7 @@ function resultHTML(rec, res, opts) {
       var canFix = d.tags.indexOf('推测') >= 0 && !d.corrected && d.level !== 'todo';
       h += '<td>' + (canFix
         ? '<button class="btn btn-ghost btn-sm" data-correct="' + d.key + '">这不准</button>'
-        : (d.corrected ? '<span class="muted" style="font-size:12px">已纠正</span>' : '')) + '</td>';
+        : (d.corrected ? '<span class="muted" style="font-size:12px">已' + (d.tags.indexOf('已下调') >= 0 ? '下调' : '上调') + '</span>' : '')) + '</td>';
     }
     h += '</tr>';
   });
@@ -500,9 +503,10 @@ function resultHTML(rec, res, opts) {
   if (rec.corrections && rec.corrections.length) {
     h += '<div class="card"><h2>纠正记录</h2>';
     rec.corrections.forEach(function (c) {
+      var down = c.direction === 'down';
       h += '<div class="record-row"><div class="r-main">'
-        + '<div class="r-title">' + esc(c.dimName) + ' <span class="tag tag-fixed">已纠正</span></div>'
-        + '<div class="r-sub">原因：' + esc(c.reason) + ' · 修正：' + esc(c.note) + ' · ' + fmtTime(c.at) + '</div>'
+        + '<div class="r-title">' + esc(c.dimName) + ' <span class="tag tag-fixed">已纠正</span> <span class="tag ' + (down ? 'tag-down' : 'tag-up') + '">' + (down ? '已下调' : '已上调') + '</span></div>'
+        + '<div class="r-sub">方向：' + (down ? '实际情况更差（下调为缺失）' : '实际情况更好（上调为充足）') + ' · 原因：' + esc(c.reason) + ' · 修正：' + esc(c.note) + ' · ' + fmtTime(c.at) + '</div>'
         + '</div></div>';
     });
     h += '</div>';
@@ -547,7 +551,7 @@ function addAction(rid, actId) {
   render();
 }
 
-/* S04 纠正 AI 推测弹窗 */
+/* S04 纠正 AI 推测弹窗（双向：先选实际情况方向，再选原因并填写说明） */
 function openCorrect(rid, dimKey) {
   var rec = findRecord(rid);
   var res = buildResult(rec, getActions().filter(function (a) { return a.rid === rid; }));
@@ -558,25 +562,33 @@ function openCorrect(rid, dimKey) {
     title: '纠正 AI 推测（S04）',
     bodyHTML: '<p class="muted">AI 的推测如下（点「这不准」的结论）：</p>'
       + '<p style="background:var(--gray-chip);border-radius:8px;padding:10px 12px;margin:6px 0 14px"><b>' + esc(dim.name) + '</b>：' + esc(dim.status) + '</p>'
-      + '<div class="field"><label>纠正原因</label><div class="radio-line">'
+      + '<div class="field"><label>实际情况是 <span class="req">*</span></label><div class="radio-line">'
+      + '<label><input type="radio" name="cd" value="up"> 更好：我具备相关经历/技能</label>'
+      + '<label><input type="radio" name="cd" value="down"> 更差：我其实不具备或更弱</label>'
+      + '</div><p class="hint">方向决定修正结果——更好：该维度上调为「充足」；更差：下调为「缺失」并生成补齐行动。纠正可升可降，匹配度如实更新，不会一律加分。</p></div>'
+      + '<div class="field"><label>纠正原因 <span class="req">*</span></label><div class="radio-line">'
       + ['信息有误', '情况已更新', '不适用'].map(function (r) { return '<label><input type="radio" name="cr" value="' + r + '"> ' + r + '</label>'; }).join('')
       + '</div></div>'
       + '<div class="field"><label>修正说明（必填）</label>'
-      + '<textarea id="cr-note" rows="3" style="width:100%" placeholder="补充真实情况，例如：曾独立策划 300 人参与的公众号抽奖联动活动"></textarea></div>',
+      + '<textarea id="cr-note" rows="3" style="width:100%" placeholder="补充真实情况，例如：曾独立策划 300 人参与的公众号抽奖联动活动；或：我不会 Excel，也没有 SQL 经验"></textarea></div>',
     actions: [
       { label: '取消', cls: 'btn-ghost' },
       {
         label: '提交纠正', cls: 'btn-primary', keep: true, fn: function () {
+          var dir = document.querySelector('input[name="cd"]:checked');
           var radio = document.querySelector('input[name="cr"]:checked');
           var note = document.getElementById('cr-note').value.trim();
+          if (!dir) { toast('请先选择实际情况方向（更好 / 更差）', 'warn'); return; }
           if (!radio) { toast('请选择纠正原因', 'warn'); return; }
           if (!note) { toast('请填写修正说明', 'warn'); return; }
           var records = getRecords();
           var rec2 = records.find(function (r) { return r.id === rid; });
-          rec2.corrections.push({ dimKey: dimKey, dimName: dim.name, conclusion: dim.status, reason: radio.value, note: note, at: Date.now() });
+          rec2.corrections.push({ dimKey: dimKey, dimName: dim.name, conclusion: dim.status, direction: dir.value, reason: radio.value, note: note, at: Date.now() });
           setRecords(records);
           closeModal();
-          toast('已根据你的纠正更新建议（1 条修正）', 'ok');  /* S05 */
+          toast(dir.value === 'down'
+            ? '已按你的纠正下调该维度并更新补齐行动（S05）'  /* S05 */
+            : '已按你的纠正上调该维度并更新建议（S05）', 'ok');  /* S05 */
           render();
         }
       }

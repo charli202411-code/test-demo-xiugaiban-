@@ -1,5 +1,5 @@
 /* 三方一致性校验（交付件）：node check.js
- * 验证模拟引擎输出与 product-doc.md v1.0.1 案例数字逐条一致（100 项断言） */
+ * 验证模拟引擎输出与 product-doc.md v1.0.2 案例数字逐条一致（双向纠正规则含负向反例） */
 const fs = require('fs');
 const path = require('path');
 const base = __dirname;
@@ -38,20 +38,48 @@ ok(dimsA['用户与活动运营'] === 'partial', '活动运营=部分满足', di
 ok(dimsA['业务理解'] === 'missing', '业务理解=缺失', dimsA['业务理解']);
 ok(dimsA['沟通与执行力'] === 'full', '沟通执行=充足', dimsA['沟通与执行力']);
 
-console.log('== 案例 A 纠正后（用户纠正活动推测）==');
-recA.corrections.push({ dimKey: 'activity', dimName: '用户与活动运营', reason: '信息有误', note: '曾独立策划 300 人参与的公众号抽奖联动活动' });
+console.log('== 案例 A 纠正后（用户纠正活动推测 · 方向=更好/上调）==');
+recA.corrections.push({ dimKey: 'activity', dimName: '用户与活动运营', direction: 'up', reason: '信息有误', note: '曾独立策划 300 人参与的公众号抽奖联动活动' });
 resA = buildResult(recA, []);
 ok(resA.match === 68, '纠正后匹配度 = 68%（文档 7.1/5.4）', resA.match);
+ok(resA.baseMatch === 59, '修正前基准匹配度 = 59%', resA.baseMatch);
 ok(resA.actions.some(a => a.title === '把联动活动写成完整案例复盘' && a.priority === '低'), '新增低优先级「联动活动复盘」');
 ok(!resA.actions.some(a => a.title === '策划 1 次小型线上活动并写复盘'), '原「策划线上活动」行动已移除');
 const fixedDim = resA.dims.find(d => d.key === 'activity');
-ok(fixedDim.level === 'full' && fixedDim.tags[0] === '已纠正', '活动维度=充足·已纠正', JSON.stringify(fixedDim.tags));
+ok(fixedDim.level === 'full' && fixedDim.tags.indexOf('已纠正') >= 0 && fixedDim.tags.indexOf('已上调') >= 0, '活动维度=充足·已纠正·已上调', JSON.stringify(fixedDim.tags));
 
 console.log('== 案例 A 行动完成后（SQL 课程 done → 数据维度升级）==');
 resA = buildResult(recA, [{ recordId: 't1', status: 'done', dimKey: 'data', title: 'SQL 课程' }]);
 ok(resA.match === 82, '完成 SQL 后匹配度 = 82%（数据维度 partial→full：9/11）', resA.match);
 const dataDim = resA.dims.find(d => d.key === 'data');
 ok(dataDim.level === 'full' && dataDim.tags.indexOf('已提升') >= 0, '数据维度标记「已提升」', JSON.stringify(dataDim.tags));
+
+console.log('== 案例 A 负向纠正（评审反例：纠正"不会 Excel、没有 SQL 经验"→ 下调）==');
+const recD = { id: 't4', profile: PRESETS.xiaoyu, corrections: [{ dimKey: 'data', dimName: '数据分析与工具', direction: 'down', reason: '信息有误', note: '我不会 Excel，也没有 SQL 经验' }] };
+const resD = buildResult(recD, []);
+ok(resD.match === 45, '负向纠正后匹配度 = 45%（数据维度 partial→missing：5/11），不得加分', resD.match);
+ok(resD.baseMatch === 59, '修正前基准匹配度 = 59%', resD.baseMatch);
+const dDim = resD.dims.find(d => d.key === 'data');
+ok(dDim.level === 'missing' && dDim.tags.indexOf('已下调') >= 0, '数据维度=缺失·已下调', dDim.level + ' | ' + dDim.tags.join(','));
+ok(dDim.status.indexOf('我不会 Excel，也没有 SQL 经验') >= 0, '维度说明保留用户修正内容', dDim.status);
+ok(resD.actions.some(a => a.title === '完成 Excel 与 SQL 基础课程' && a.priority === '高'), '负向纠正后新增高优先级补齐行动「完成 Excel 与 SQL 基础课程」');
+ok(!resD.actions.some(a => a.title === '完成 SQL 基础课程，并用公众号后台数据做 1 次小分析练习'), '原 partial 级 SQL 行动已替换为 missing 级补齐行动');
+ok(resD.actions.length === 6, '行动清单 6 项（missing 级 2 项替换 partial 级 1 项）', resD.actions.length);
+ok(resD.timeCheck.ok === true, '时间检查通过（高优先级每周 4h ≤ 10h×80%）', JSON.stringify(resD.timeCheck));
+
+console.log('== 案例 A 负向纠正后完成补齐行动（行动验证：missing→partial 回升）==');
+const resD2 = buildResult(recD, [{ recordId: 't4', status: 'done', dimKey: 'data', title: 'Excel 与 SQL 基础课程' }]);
+ok(resD2.match === 59, '完成「Excel 与 SQL 基础课程」后匹配度回升 = 59%', resD2.match);
+const dDim2 = resD2.dims.find(d => d.key === 'data');
+ok(dDim2.level === 'partial' && dDim2.tags.indexOf('已提升') >= 0, '数据维度=部分满足·已提升（负向纠正后仍可通过行动回升）', JSON.stringify(dDim2.tags));
+
+console.log('== 案例 A 负向纠正后两次行动（missing→partial→full 行动验证闭环）==');
+const resD3 = buildResult(recD, [
+  { recordId: 't4', status: 'done', dimKey: 'data', title: 'Excel 与 SQL 基础课程' },
+  { recordId: 't4', status: 'done', dimKey: 'data', title: 'SQL 基础课程' }
+]);
+ok(resD3.match === 73, '再完成 SQL 课程后匹配度 = 73%（missing→partial→full：8/11）', resD3.match);
+ok(resD3.dims.find(d => d.key === 'data').level === 'full', '数据维度经两次行动回升至充足');
 
 console.log('== 案例 B1：李明（前端开发实习生 · 零经历）==');
 const recB = { id: 't2', profile: PRESETS.liming, corrections: [] };

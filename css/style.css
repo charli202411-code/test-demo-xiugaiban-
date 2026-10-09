@@ -60,6 +60,11 @@ button{font:inherit;cursor:pointer}
 .tag-todo{background:#eef1f6;color:#5b6478;border-color:#dde2ec}
 .tag-fixed{background:var(--purple-weak);color:var(--purple);border-color:#e2d4fb}
 .tag-up{background:#e6f7f1;color:#0e7a57;border-color:#c4ecdf}
+.tag-down{background:var(--bad-weak);color:var(--bad);border-color:#f5c9c9}
+.match-delta{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:13px;font-weight:500;border-radius:8px;padding:5px 12px}
+.match-delta.up{background:var(--ok-weak);color:#0e7a57}
+.match-delta.down{background:var(--bad-weak);color:var(--bad)}
+.match-delta b{font-size:16px}
 .p-high{background:#fdeaea;color:var(--bad)}
 .p-mid{background:#fdf3e3;color:var(--warn)}
 .p-low{background:var(--gray-chip);color:var(--muted)}

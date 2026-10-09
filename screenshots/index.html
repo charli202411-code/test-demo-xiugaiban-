@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>实习罗盘 · 原型图集 v1.0.1（P01–P08 / S01–S08）</title>
+<title>实习罗盘 · 原型图集 v1.0.2（P01–P08 / S01–S08）</title>
 <style>
 :root{--ink:#1a2233;--muted:#5b6478;--line:#e5e9f2;--brand:#3b5bfd;--brand-weak:#eef1ff}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -41,13 +41,24 @@ footer{color:#9aa3b5;font-size:12px;text-align:center;margin-top:26px}
   <h1>实习罗盘 · 原型图集</h1>
   <div class="sub">面向首次准备实习的大学生 AI 求职准备助手（演示原型）</div>
   <table>
-    <tr><td>图集版本</td><td>v1.0.1 —— 与可操作原型、product-doc.md 同一版本</td></tr>
-    <tr><td>画面来源</td><td>全部截图直接取自本仓库交付代码（index.html + js/ + css/）在浏览器中的真实运行画面，与 <code>docker compose up --build</code> 演示完全一致</td></tr>
+    <tr><td>图集版本</td><td>v1.0.2 —— 页面与状态清单、业务规则均对应 product-doc.md v1.0.2；截图为 v1.0.1 基线采集，受 v1.0.2 影响的 S04 / S05 / P07 三幅已逐幅标注</td></tr>
+    <tr><td>画面来源</td><td>全部截图取自本仓库交付代码（index.html + js/ + css/）在浏览器中的真实运行画面（1440×900，v1.0.1 基线）；除已标注的 3 幅外，其余画面与 v1.0.2 <code>docker compose up --build</code> 演示一致</td></tr>
     <tr><td>编号规则</td><td>P01–P08 = 页面（product-doc.md 3.1）；S01–S08 = 弹窗与异常状态（product-doc.md 3.2）</td></tr>
     <tr><td>演示设备</td><td>桌面浏览器 1440×900（Chrome/Edge），兼容 375×812</td></tr>
     <tr><td>数据说明</td><td>截图中的角色（张小雨/李明）与数据均为虚构模拟内容；「AI 输出」为本地规则引擎模拟，无真实模型调用</td></tr>
   </table>
 </header>
+
+<div style="background:#fff;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:12px;padding:16px 18px;margin-bottom:14px">
+  <b style="font-size:15px">v1.0.2 变更标注（针对评审意见 · 2026-10-09）</b>
+  <ul style="margin:8px 0 0 18px;color:var(--muted);font-size:13px;line-height:1.85">
+    <li><b>双向纠错</b>：S04 纠正弹窗新增「实际情况是（更好 / 更差）」必选方向项——更好 → 该维度上调为「充足」；更差 → 下调为「缺失」并生成补齐行动。纠正可升可降、不一律加分。</li>
+    <li><b>负向纠正反例</b>：纠正「我不会 Excel，也没有 SQL 经验」→「数据分析与工具」由部分满足下调为缺失，匹配度 59% → 45%，行动清单替换为高优先级「完成 Excel 与 SQL 基础课程」等补齐行动。</li>
+    <li><b>行动验证闭环</b>：负向纠正的维度可通过完成行动逐级回升（缺失 → 部分满足 → 充足），匹配度 45% → 59% → 73%——纠正揭示真实差距，行动补齐差距。</li>
+    <li><b>界面呈现</b>：P04 匹配度卡新增「纠正修正：X% → Y%（↑/↓ N 个百分点）」对比条；维度表与纠正记录区分「已上调 / 已下调」标签；S05 横幅按方向区分文案。</li>
+    <li><b>受影响画面</b>：S04（弹窗布局）、S05（横幅文案 + 对比条）、P07（含纠正快照的对比条）三幅，均为 v1.0.1 基线画面，已逐幅标注变化内容；最新交互以可运行原型为准（README「评审演示脚本② 正向 / ⑤ 负向」可完整复现），规则与数字可用 <code>node check.js</code> 校验（113 项断言）。</li>
+  </ul>
+</div>
 
 <h2 class="sec">一、页面（P01–P08）</h2>
 <p class="secnote">路由为 hash 形式，直接在地址栏 #/ 后输入即可定位；P01 与 P08 各含两个子状态。</p>
@@ -102,7 +113,8 @@ footer{color:#9aa3b5;font-size:12px;text-align:center;margin-top:26px}
 
 <figure>
   <figcaption><b>P07 · 历史详情页</b> — 该次分析完成时的快照（含纠正记录），不随后续修改变化
-    <span class="how">进入方式：P06 点击某条记录 → #/history/:id｜截图文件：P07-history-detail.png</span></figcaption>
+    <span class="how">进入方式：P06 点击某条记录 → #/history/:id｜截图文件：P07-history-detail.png</span>
+    <span class="how" style="color:#b45309">v1.0.2：含纠正的快照，匹配度卡同样显示「纠正修正：59% → 68%」对比条，纠正记录增加方向标签（图为 v1.0.1 画面）</span></figcaption>
   <img src="./P07-history-detail.png" alt="P07 历史详情页">
 </figure>
 
@@ -140,14 +152,16 @@ footer{color:#9aa3b5;font-size:12px;text-align:center;margin-top:26px}
 </figure>
 
 <figure>
-  <figcaption><b>S04 · 纠正 AI 推测弹窗</b> — 显示被纠正结论，选择原因 + 填写修正说明
-    <span class="how">触发：结果页 [推测] 条目点「这不准」｜截图文件：S04-correct-modal.png</span></figcaption>
+  <figcaption><b>S04 · 纠正 AI 推测弹窗</b> — 显示被纠正结论，先选「实际情况是」方向（更好 / 更差，必选）再选原因 + 填写修正说明
+    <span class="how">触发：结果页 [推测] 条目点「这不准」｜截图文件：S04-correct-modal.png</span>
+    <span class="how" style="color:#b45309">v1.0.2：弹窗新增「实际情况是（更好：上调为充足 / 更差：下调为缺失）」必选方向项，及「纠正可升可降，不会一律加分」提示（图为 v1.0.1 画面）</span></figcaption>
   <img src="./S04-correct-modal.png" alt="S04 纠正 AI 推测弹窗">
 </figure>
 
 <figure>
-  <figcaption><b>S05 · 建议已更新横幅 + 纠正后结果</b> — 纠正提交后匹配度 59%→68%，右上角横幅提示 1 条修正
-    <span class="how">触发：S04 提交纠正后自动出现（横幅约 3.4 秒）｜截图文件：S05-updated-toast.png</span></figcaption>
+  <figcaption><b>S05 · 建议已更新横幅 + 纠正后结果（正向）</b> — 纠正（更好）提交后匹配度 59%→68%，右上角横幅提示已上调
+    <span class="how">触发：S04 提交纠正后自动出现（横幅约 3.4 秒）｜截图文件：S05-updated-toast.png</span>
+    <span class="how" style="color:#b45309">v1.0.2：匹配度卡新增「纠正修正：59% → 68%（↑ 上调 9 个百分点）」对比条；横幅文案改为「已按你的纠正上调该维度并更新建议」，负向纠正则为「已按你的纠正下调该维度并更新补齐行动」（图为 v1.0.1 画面）</span></figcaption>
   <img src="./S05-updated-toast.png" alt="S05 更新横幅与纠正后结果">
 </figure>
 
@@ -169,7 +183,7 @@ footer{color:#9aa3b5;font-size:12px;text-align:center;margin-top:26px}
   <img src="./S08-starter-result.png" alt="S08 起步模式结果页">
 </figure>
 
-<footer>实习罗盘 · 110-LAB 产品岗考核交付 · 原型图集 v1.0.1 · 截图取自交付代码运行画面，与可操作原型同版本</footer>
+<footer>实习罗盘 · 110-LAB 产品岗考核交付 · 原型图集 v1.0.2 · 截图取自交付代码运行画面（v1.0.1 基线，受影响画面已逐幅标注），业务规则与可运行原型 v1.0.2 一致</footer>
 </div>
 </body>
 </html>
